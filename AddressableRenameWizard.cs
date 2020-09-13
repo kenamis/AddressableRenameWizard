@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEngine.AddressableAssets;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
+using UnityEditor.AddressableAssets.GUI;
 
 public class AddressableRenameWizard : ScriptableWizard
 {
@@ -17,7 +18,12 @@ public class AddressableRenameWizard : ScriptableWizard
 
     public bool prependFolderName = false;
 
-    static string info = "Example format, all optional; {prefix0}.{prefix1}.{prefix2}.{FolderName}.{AssetName}.{postfix}";
+    HashSet<string> labelsToAdd = new HashSet<string>();
+    HashSet<string> labelsToRemove = new HashSet<string>();
+
+    static GUIStyle centeredLabelStyle;
+    static GUIStyle centeredButtonStyle;
+    static string info = "Example format, all optional;\n {prefix0}.{prefix1}.{prefix2}.{FolderName}.{AssetName}.{postfix}";
 
     [MenuItem("Assets/Addressable Rename Wizard")]
     static void CreateWizard()
@@ -41,6 +47,18 @@ public class AddressableRenameWizard : ScriptableWizard
 
     protected override bool DrawWizardGUI()
     {
+        if(centeredLabelStyle == null)
+        {
+            centeredLabelStyle = new GUIStyle(GUI.skin.label);
+            centeredLabelStyle.alignment = TextAnchor.MiddleCenter;
+        }
+
+        if(centeredButtonStyle == null)
+        {
+            centeredButtonStyle = new GUIStyle(GUI.skin.button);
+            centeredButtonStyle.alignment = TextAnchor.MiddleCenter;
+        }
+
         EditorGUI.BeginChangeCheck();
         prefix0 = EditorGUILayout.TextField(new GUIContent("Prefix0"), prefix0);
         prefix1 = EditorGUILayout.TextField(new GUIContent("Prefix1"), prefix1);
@@ -48,6 +66,47 @@ public class AddressableRenameWizard : ScriptableWizard
         postfix0 = EditorGUILayout.TextField(new GUIContent("Postfix0"), postfix0);
         prependFolderName = EditorGUILayout.Toggle(new GUIContent("Prepend Folder Name"),prependFolderName);
         EditorGUILayout.HelpBox(info, MessageType.Info);
+
+        AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+        if (settings == null)
+        {
+            EditorGUILayout.HelpBox("Could not find AddressableAssetSettings!", MessageType.Error);
+        }
+        else
+        {
+            GUILayout.Space(10);
+            EditorGUILayout.LabelField("Add/Remove Labels To Entries", centeredLabelStyle);
+            List<string> labels = settings.GetLabels();
+            foreach(string label in labels)
+            {
+                EditorGUILayout.BeginHorizontal();
+                if(GUILayout.Toggle(labelsToAdd.Contains(label), "+", centeredButtonStyle, GUILayout.MaxWidth(25)))
+                {
+                    labelsToAdd.Add(label);
+                    labelsToRemove.Remove(label);
+                }
+                else
+                {
+                    labelsToAdd.Remove(label);
+                }
+
+                EditorGUILayout.LabelField(label, centeredLabelStyle, GUILayout.MaxWidth(100));
+
+                if (GUILayout.Toggle(labelsToRemove.Contains(label), "-", centeredButtonStyle, GUILayout.MaxWidth(25)))
+                {
+                    labelsToRemove.Add(label);
+                    labelsToAdd.Remove(label);
+                }
+                else
+                {
+                    labelsToRemove.Remove(label);
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (GUILayout.Button("Manage Labels")) { EditorWindow.GetWindow<LabelWindow>(true).Intialize(settings); }
+        }
+
         return EditorGUI.EndChangeCheck();
     }
 
@@ -90,6 +149,17 @@ public class AddressableRenameWizard : ScriptableWizard
                     if (!string.IsNullOrEmpty(postfix0)) { newAddress.Append("."); newAddress.Append(postfix0); }
 
                     entry.SetAddress(newAddress.ToString(), false);
+
+                    foreach(string label in labelsToAdd)
+                    {
+                        entry.SetLabel(label, true, false, false);
+                    }
+
+                    foreach (string label in labelsToRemove)
+                    {
+                        entry.SetLabel(label, false, false, false);
+                    }
+
                     entries.Add(entry);
                 }
                 else
